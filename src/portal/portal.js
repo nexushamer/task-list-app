@@ -1,87 +1,154 @@
 import React, { useEffect, useState } from 'react';
 import { properties } from '../properties';
 import axios from 'axios';
-import {Button, Navbar, Form, Container, Col, Row, } from 'react-bootstrap';
-import ModalPanel from './modal';
 import './portal.css';
+import PortalContent from './portalContent';
+import ModalCreatePanel from './modalCreatePanel';
+import ModalEditPanel from './modalEditPanel';
 
 function Portal(props) {
-    const tasks = [
-        {
-            id: "7fda4200-59fd-4838-946c-66c63782d88a",
-            state: "PENDING",
-            description: "Create all the files and sort it by the number",
-            estimatedDateOfCompletion: "2020/06/21 18:15:15"
-        },
-        {
-            id: "9a811a40-548b-46fd-9fd1-34b77a4b2e6d",
-            state: "PENDING",
-            description: "Create all the files and sort it by the number",
-            estimatedDateOfCompletion: "2020/06/21 18:15:15"
-        }
-    ];
-    const [userTasks, setUserTasks] = useState({tasks: tasks});
+    const [dataLoaded, setDataLoaded] = useState(false);
+    const [userTasks, setUserTasks] = useState({tasks: []});
     const [showModal, setShowModal] = useState(false);
+    const [showModalEdit, setShowModalEdit] = useState(false);
+    const [currentTaskToEdit, setCurrentTaskToEdit] = useState({task:null});
     const userId = localStorage.getItem('userId');
-    const AUTH_URI = '/task/userId/'
+    const [description, setDescription] = useState('');
+    const [dateToComplete, setDateToComplete] = useState('');
+    const AUTH_URI = '/task'
 
     useEffect(() => {
         const fetchTasks = async function() {
-            console.log('Fetching the taks from the bacend');
-            const urlEndpoint = properties.wsEndpoint + AUTH_URI + userId;
+            const USER_ID_PATH = '/userId/';
+            const urlEndpoint = properties.wsEndpoint + AUTH_URI + USER_ID_PATH + userId;
             const response = await axios.get(urlEndpoint);
             if(response && response.data) {
                 setUserTasks({
                     tasks: response.data
                 })
+                setDataLoaded(true);
             }
         };
 
-        //fetchTasks();
-    })
+        const checkSession = function() {
+            const token = localStorage.getItem('token');
+            if(!token) {
+                props.history.push('/');
+                return false;
+            }
+
+            return true;
+        };
+
+        if(!checkSession())
+            return;
+
+        if(!dataLoaded)
+            fetchTasks();
+    });
 
     const closeSession = (event) => {
         props.history.push('/');
         localStorage.removeItem('token');
+        localStorage.removeItem('userId');
     };
 
     const openModalHandler = () => {
         setShowModal(true);
+        setShowModalEdit(false);
+    };
+
+    const openModalHandlerForEdit = (task) => {
+        let taskToSend = {
+            id:task.id,
+            state:task.state,
+            userId: userId
+        };
+        
+        setCurrentTaskToEdit(taskToSend);
+        setShowModal(false);
+        setShowModalEdit(true);
     };
 
     const closeModalHandler = () => {
         setShowModal(false);
     };
 
+    const closeModalEditHandler = () => {
+        setShowModalEdit(false);
+    };
+
+    const changeStateHandler = (state) => {
+        currentTaskToEdit.state = state;
+
+        setCurrentTaskToEdit(currentTaskToEdit);
+    };
+
+    const saveTaskHandler = async (description, dateToComplete) => {
+        const formatDate = (date, hour, minute, second) => `${date} ${hour}:${minute}:${second}`;
+        let validation = true;
+        if(!description) {
+            alert('Description is Required');
+            validation = false;
+        }
+
+        if (validation) {
+            const date = new Date();
+            const estimatedDateOfCompletion =
+                formatDate(dateToComplete, date.getHours(), date.getMinutes(), date.getSeconds());
+            const task = {
+                userId: userId,
+                task: {
+                    description: description,
+                    estimatedDateOfCompletion: estimatedDateOfCompletion
+                }
+            };
+
+            const urlEndpoint = properties.wsEndpoint + AUTH_URI;
+            const response = await axios.post(urlEndpoint, task);
+            if (response) {
+                closeModalHandler();
+                setDataLoaded(false);
+                setDescription(description);
+                setDateToComplete(dateToComplete)
+            }
+        } else 
+            return validation;
+    };
+
+    const updateTaskHandler = async () => {
+        console.log('The update of the task will be send');
+
+        console.log(currentTaskToEdit);
+
+        const urlEndpoint = properties.wsEndpoint + AUTH_URI;
+        const response = await axios.patch(urlEndpoint, currentTaskToEdit);
+        if (response) {
+            closeModalEditHandler();
+            setDataLoaded(false);
+        }
+    };
+
     return (
         <div>
-            <Navbar bg="light justify-content-between" expand="lg">
-            <Navbar.Brand href="#home" style={{textTransform: 'uppercase'}} >task manager</Navbar.Brand>
-            <Form inline>
-              <Button onClick={closeSession} >Close Session</Button>
-            </Form>
-            </Navbar>
-            <Container>
-                <Row className="panelCreateButton" >
-                    <Col md={2} className="panelCreateButtonCols" >
-                        <Button onClick={openModalHandler} >Create Task</Button>
-                    </Col>
-                    <Col md={10} ></Col>
-                </Row>
-                <Row style={{ border:  'solid 1px black'}} >
-                    <Col>
-                    {userTasks.tasks.map(task => 
-                    <Row style={{marginTop: '2px', marginBottom: '2px' }} >
-                        <Col md={7} >{task.description}</Col>
-                        <Col md={2} >{task.estimatedDateOfCompletion}</Col>
-                        <Col md={2} >{task.state}</Col>
-                        <Col md={1} ><Button onClick={openModalHandler} >Edit</Button></Col>
-                    </Row>
-                    )}
-                    </Col>
-                </Row>
-            </Container>
-            <ModalPanel show={showModal} handleClose={closeModalHandler} />
+            <PortalContent 
+            userTasks={userTasks} 
+            closeSession={closeSession} 
+            openModalHandlerForEdit={openModalHandlerForEdit} 
+            openModalHandler={openModalHandler}/>
+            <ModalCreatePanel 
+            descriptionProperty = {description}
+            dateToCompleteProperty = {dateToComplete}
+            show={showModal} 
+            handleClose={closeModalHandler} 
+            handleSave={saveTaskHandler}
+            handleUpdate={updateTaskHandler}
+            changeStateFunctionHandler={changeStateHandler} />
+            <ModalEditPanel 
+            show={showModalEdit} 
+            handleClose={ closeModalEditHandler }
+            handleSave={updateTaskHandler}
+            changeStateFunctionHandler={changeStateHandler} />
         </div>
     );
 }

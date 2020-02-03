@@ -33,8 +33,13 @@ function Login(props) {
 
         const createSessionEndpoint = properties.wsEndpoint + AUTH_URI;
         let response = null;
+        console.log(event.target);
+        let button = event.target;
         try {
+            button.disabled = true;
             response = await axios.post(createSessionEndpoint, loginRequest);
+            button.disabled = null;
+
             if(response && response.data) {
                 const token = response.data.token;
                 localStorage.setItem('token', token);
@@ -46,7 +51,8 @@ function Login(props) {
             }
             console.log(response);
         } catch (e) {
-            
+            alert('There was an issue with the server connection, check if the service is avalible');
+            button.disabled = null;
         }
     };
 
@@ -77,7 +83,7 @@ function Login(props) {
                                     <Form.Label>Password</Form.Label>
                                     <Form.Control type="password" placeholder="Password" value={password} onChange={passwordHandler} />
                                 </Form.Group>
-                                <Button variant="primary" type="button" onClick={loginUser} >Login Session</Button>
+                                <Button variant="primary" type="button" onClick={loginUser}>Login Session</Button>
                             </Form>
                         </Card.Body>
                     </Card>
@@ -85,7 +91,6 @@ function Login(props) {
                 <Col />
             </Row>
         </Container>
-        
     );
 }
 
